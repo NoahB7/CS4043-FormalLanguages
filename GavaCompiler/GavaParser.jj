@@ -1,0 +1,788 @@
+/**
+ * JavaCC template file created by SF JavaCC plugin 1.5.28+ wizard for JavaCC 1.5.0+
+ */
+options
+{
+  static = true;
+}
+
+PARSER_BEGIN(GavaParser)
+import java.io.*;
+
+public class GavaParser
+{
+  public static void main(String args []) throws ParseException, IOException
+  {
+    GavaParser parser = new GavaParser(new BufferedReader(new FileReader("Gava.txt")));
+    String output = GavaParser.parser();
+    String filename = output.substring(output.indexOf("class ") + 6, output.indexOf("{")) + ".java";
+    BufferedWriter bw = new BufferedWriter(new FileWriter(filename));
+    bw.write(output);
+    bw.close();
+    /*
+    while (true)
+    {
+      System.out.println("Reading from standard input...");
+      System.out.print("Enter an expression like \"1+(2+3)*4;\" :");
+      try
+      {
+        //GavaParser.print();
+      }
+      catch (Exception e)
+      {
+        System.out.println("NOK.");
+        System.out.println(e.getMessage());
+        GavaParser.ReInit(System.in);
+      }
+      catch (Error e)
+      {
+        System.out.println("Oops.");
+        System.out.println(e.getMessage());
+        break;
+      }
+    }
+    */
+  }
+}
+
+PARSER_END(GavaParser)
+
+SKIP :
+{
+  " "
+| "\r"
+| "\t"
+| "\n"
+}
+
+TOKEN : /* SYMBOLS */
+{
+  < PLUS : "+" >
+| < PLUSPLUS : "++" >
+| < PLUSE : "+=" >
+| < MINUS : "-" >
+| < MINUSMINUS : "--" >
+| < MINUSE : "-=" >
+| < MULTIPLY : "*" >
+| < MULTIPLYE : "*=" >
+| < DIVIDE : "/" >
+| < DIVIDEE : "/=" >
+| < TERMINATOR : ";" >
+| < ASSIGNMENT : "<-" >
+| < BOOLOPERATORS :
+    ">"
+  | "<"
+  | ">="
+  | "<=" >
+| < EQ : "<=>" >
+| < NQ : "<!>" >
+| < NOT : "!" >
+| < LBRACE : "{" >
+| < RBRACE : "}" >
+}
+
+TOKEN : /* KEYWORDS */
+{
+  < IF : "if" >
+| < LOOP : "loop" >
+| < INT : "int" >
+| < DOUBLE : "triple" >
+| < STRING : "string" >
+| < VOID : "nothing" >
+| < NULL : "empty" >
+| < ELSE : "else" >
+| < PRINT : "print" >
+}
+
+TOKEN : /* LITERALS */
+{
+  < STRINGLITERAL : "~" (~[ "~" ])+ "~" > /* just anything but a "quote"(~) inside */
+| < TRIPLELITERAL :
+    ("-")?
+    (
+      (< DIGIT >)+ (".")? (< DIGIT >)*
+    )
+  |
+    (
+      (< DIGIT >)* "." (< DIGIT >)+
+    ) >
+| < INTLITERAL : ("-")? (< DIGIT >)+ >
+| < BOOLLITERAL :
+    "true"
+  | "false" >
+}
+
+TOKEN : /* VARIABLES or IDENTIFIER */
+{
+  < IDENTIFIER :
+    < LETTER >
+    (
+      < LETTER >
+    | < DIGIT >
+    )* >
+| < LETTER : [ "_", "a"-"z", "A"-"Z" ] >
+| < DIGIT : [ "0"-"9" ] >
+}
+
+String statement(String indent) :
+{
+  String s;
+  boolean inline = false;
+}
+{
+  (
+    LOOKAHEAD(4)
+    s = variableDeclaration(indent, inline)
+  | s = variableAssignment(indent, inline)
+  | s = print(indent)
+  | s = conditionalStructure(indent)
+  | s = loop(indent)
+  )
+  {
+    return s;
+  }
+}
+
+//parse to java stuff-----------------------------------------------------
+String parser() :
+{
+  StringBuilder file = new StringBuilder();
+  String s;
+  Token t;
+  String indent = "\t\t";
+}
+{
+  t = < IDENTIFIER > "{"
+  {
+    file.append("public class ");
+    file.append(t.toString());
+    file.append("{\n\t");
+    file.append("public static void main(String[] args){\n");
+  }
+  (
+    s = statement(indent)
+    {
+      file.append(s);
+    }
+  )*
+  < RBRACE >
+  {
+    file.append("\t}\n}");
+    return file.toString();
+  }
+}
+
+//looping structure-----------------------------------------------------
+String loop(String indent) :
+{
+  Token t, y;
+  String var, bool, s;
+  StringBuilder sb = new StringBuilder();
+  boolean inline = true;
+  double d = 0;
+}
+{
+  < LOOP > "("
+  (
+    LOOKAHEAD(3)
+    var = variableDeclaration("", true)
+  | var = variableAssignment("", true)
+  )
+  bool = booleanexpression() < TERMINATOR > t = < IDENTIFIER >
+  (
+    (
+      y = < PLUSPLUS >
+    | y = < MINUSMINUS >
+    )
+  |
+    (
+      y = < PLUSE > d = expression()
+    | y = < MINUSE > d = expression()
+    | y = < DIVIDEE > d = expression()
+    | y = < MULTIPLYE > d = expression()
+    )
+  )
+  ")" < LBRACE >
+  {
+    sb.append(indent);
+    sb.append("for (");
+    sb.append(var);
+    sb.append(bool + ";");
+    sb.append(t.toString());
+    sb.append(y.toString());
+    if (d != 0)
+    {
+      sb.append(d);
+    }
+    sb.append("){\n");
+  }
+  (
+    s = statement(indent+ "\t")
+    {
+      sb.append(s);
+    }
+  )*
+  < RBRACE >
+  {
+    sb.append(indent);
+    sb.append("}\n");
+    return sb.toString();
+  }
+}
+
+//---------------------------------------------------------------------
+//conditional structure-------------------------------------------------------------------
+//combined so the order must be maintained e.g. if - > else if - > else and not else -> else if
+String conditionalStructure(String indent) :
+{
+  StringBuilder struct = new StringBuilder();
+  String s;
+}
+{
+  s = IF(indent)
+  {
+    struct.append(s);
+  }
+  (
+    s = ELSE(indent)
+    {
+      struct.append(s);
+    }
+  )?
+  {
+    return struct.toString();
+  }
+}
+
+String IF(String indent) :
+{
+  StringBuilder code = new StringBuilder();
+  String s;
+}
+{
+  < IF > "(" s = booleanexpression() ")" < LBRACE >
+  {
+    code.append(indent);
+    code.append("if(");
+    code.append(s);
+    code.append("){");
+    code.append("\n");
+  }
+  (
+    s = statement(indent+ "\t")
+    {
+      code.append(s);
+    }
+  )*
+  < RBRACE >
+  {
+    code.append(indent);
+    code.append("}\n");
+    return code.toString();
+  }
+}
+
+String ELSE(String indent) :
+{
+  StringBuilder code = new StringBuilder();
+  String s;
+}
+{
+  < ELSE > < LBRACE >
+  {
+    code.append(indent);
+    code.append("else{\n");
+  }
+  (
+    s = statement(indent+ "\t")
+    {
+      code.append(s);
+    }
+  )*
+  < RBRACE >
+  {
+    code.append(indent);
+    code.append("}\n");
+    return code.toString();
+  }
+}
+
+//this will be a lot like the math expression because we need to account for ridiculous booleans like ((3 > 2) == true) != false
+//too lazy to do this right now though
+String booleanexpression() :
+{
+  String s;
+  StringBuilder exp = new StringBuilder();
+}
+{
+  s = booleanfactor()
+  {
+    exp.append(s);
+  }
+  (
+    "||" s = booleanfactor()
+    {
+      exp.append("||");
+      exp.append(s);
+    }
+  )*
+  {
+    return exp.toString();
+  }
+}
+
+String booleanfactor() :
+{
+  String s;
+  StringBuilder exp = new StringBuilder();
+}
+{
+  s = booleanterm()
+  {
+    exp.append(s);
+  }
+  (
+    "&&" s = booleanterm()
+    {
+      exp.append("&&");
+      exp.append(s);
+    }
+  )*
+  {
+    return exp.toString();
+  }
+}
+
+String booleanterm() :
+{
+  String s;
+  Token t;
+  StringBuilder exp = new StringBuilder();
+  double d;
+}
+{
+  ( //parentheses around a booleanexpression
+    //this required significant lookahead since it has to completely parse a possible math expression to discern
+    //whether the parentheses it saw was either an expression or a boolean expression
+    LOOKAHEAD(8)
+    "(" s = booleanexpression() ")"
+    {
+      exp.append("(");
+      exp.append(s);
+      exp.append(")");
+    }
+  |
+    (
+      LOOKAHEAD(2)
+      t = < INTLITERAL >
+      {
+        exp.append(t.toString());
+      }
+    | 
+      d = expression()
+      {
+        exp.append(d + "");
+      }
+    | t = < IDENTIFIER >
+      {
+        exp.append(t.toString());
+      }
+    )
+    (
+      t = < BOOLOPERATORS >
+      {
+        exp.append(t.toString());
+      }
+    | t = < NQ >
+      {
+        exp.append("!=");
+      }
+    | t = < EQ >
+      {
+        exp.append("==");
+      }
+    )
+    (
+      LOOKAHEAD(2)
+      t = < INTLITERAL >
+      {
+        exp.append(t.toString());
+      }
+    | 
+      d = expression()
+      {
+        exp.append(d + "");
+      }
+    | t = < IDENTIFIER >
+      {
+        exp.append(t.toString());
+      }
+    )
+    //Bool literal(true,false) or true == true false != true etc.
+  | 
+    t = < BOOLLITERAL >
+    {
+      exp.append(t.toString());
+    }
+    (
+      (
+        t = < EQ >
+        {
+          exp.append("==");
+        }
+      | t = < NQ >
+        {
+          exp.append("!=");
+        }
+      )
+      t = < BOOLLITERAL >
+      {
+        exp.append(t.toString());
+      }
+    )?
+    // !true !(false) !(booleanexpression)
+  | "!" s = booleanexpression()
+    {
+      exp.append("!");
+      exp.append(s);
+    }
+    // num (< | > | <= | >= | == | !=) num
+  )
+  {
+    return exp.toString();
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//math expression stuff------------------------------------------------------------------
+//might not need this v
+double expression() :
+{
+  double x;
+  double y;
+}
+{
+  x = term()
+  (
+    "-" y = term()
+    {
+      x -= y;
+    }
+  | 
+    "+" y = term()
+    {
+      x += y;
+    }
+  )*
+  {
+    return x;
+  }
+}
+
+double term() :
+{
+  double x;
+  double y;
+}
+{
+  x = factor()
+  (
+    (
+      "*" y = factor()
+    )
+    {
+      x *= y;
+    }
+  |
+    (
+      "/" y = factor()
+    )
+    {
+      x /= y;
+    }
+  )*
+  {
+    return x;
+  }
+}
+
+double factor() :
+{
+  Token t;
+  double x;
+}
+{
+  LOOKAHEAD(7)
+  t = < TRIPLELITERAL >
+  {
+    return Double.parseDouble(t.toString());
+  }
+| LOOKAHEAD(6)
+  t = < INTLITERAL >
+  {
+    return Double.parseDouble(t.toString());
+  }
+| "(" x = expression() ")"
+  {
+    return x;
+  }
+}
+
+//----------------------------------------------------------------------------
+//print stuff--------------------------------------------------------------------
+String print(String indent) :
+{
+  Token s;
+  double x;
+  int y;
+  String out = "";
+}
+{
+  < PRINT > "("
+  (
+    LOOKAHEAD(3)
+    s = < INTLITERAL > ")" < TERMINATOR >
+    {
+      out = s.toString();
+      out = out.substring(0, out.length() - 2);
+      return indent + "System.out.println(" + Integer.parseInt(out) + ");\n";
+    }
+  | LOOKAHEAD(7) //significant lookahead again for boolean expression "(" versus expression "("
+    out = booleanexpression() ")" < TERMINATOR >
+    {
+      return indent + "System.out.println(" + out + ");\n";
+    }
+  | x = expression() ")" < TERMINATOR >
+    {
+      return indent + "System.out.println(" + x + ");\n";
+    }
+  | s = < STRINGLITERAL > ")" < TERMINATOR >
+    {
+      String str = s.toString();
+      str = str.substring(1, str.length() - 1);
+      return indent + "System.out.println(\"" + str + "\");\n";
+    }
+  | s = < IDENTIFIER > ")" < TERMINATOR >
+    {
+      return indent + "System.out.println(" + s.toString() + ");\n";
+    }
+  )
+}
+
+//----------------------------------------------------------------------------
+//variable declaration stuff---------------------------------
+String variableDeclaration(String indent, boolean inline) :
+{
+  String x = "";
+  Token y;
+}
+{
+  (
+    y = < INT >
+    {
+      x += y.toString() + " ";
+    }
+    y = < IDENTIFIER >
+    {
+      x += y.toString();
+    }
+    y = < TERMINATOR >
+    {
+      x += y.toString();
+    }
+  | 	y = < DOUBLE >
+    {
+      x += "float ";
+    }
+    y = < IDENTIFIER >
+    {
+      x += y.toString();
+    }
+    y = < TERMINATOR >
+    {
+      x += y.toString();
+    }
+  | 	y = < STRING >
+    {
+      x += "String ";
+    }
+    y = < IDENTIFIER >
+    {
+      x += y.toString();
+    }
+    y = < TERMINATOR >
+    {
+      x += y.toString();
+    }
+  )
+  {
+    if (inline)
+    {
+      return x;
+    }
+    else
+    {
+      return indent + x + "\n";
+    }
+  }
+}
+
+String variableAssignment(String indent, boolean inline) :
+{
+  String x = "";
+  String w;
+  Token y;
+  Double z;
+}
+{
+  (
+    y = < IDENTIFIER >
+    {
+      x += y.toString();
+    }
+    (
+      < ASSIGNMENT >
+      {
+        x += "=";
+      }
+    | y = < PLUSE >
+      {
+        x += y.toString();
+      }
+    | y = < MINUSE >
+      {
+        x += y.toString();
+      }
+    | y = < DIVIDEE >
+      {
+        x += y.toString();
+      }
+    | y = < MULTIPLYE >
+      {
+        x += y.toString();
+      }
+    )
+    (
+      z = expression()
+      {
+        x += z + "";
+      }
+    | y = < STRINGLITERAL >
+      {
+        String str = y.toString();
+        str = str.substring(1, str.length() - 1);
+        str = "\"" + str + "\"";
+        x += str;
+      }
+    )
+    y = < TERMINATOR >
+    {
+      x += y.toString();
+    }
+  | y = < INT >
+    {
+      x += y.toString() + " ";
+    }
+    y = < IDENTIFIER >
+    {
+      x += y.toString();
+    }
+    (
+      < ASSIGNMENT >
+      {
+        x += "=";
+      }
+    | y = < PLUSE >
+      {
+        x += y.toString();
+      }
+    | y = < MINUSE >
+      {
+        x += y.toString();
+      }
+    | y = < DIVIDEE >
+      {
+        x += y.toString();
+      }
+    | y = < MULTIPLYE >
+      {
+        x += y.toString();
+      }
+    )
+    z = expression()
+    { //absolutely ridiculous that a workaround like this is needed...
+      z = Math.floor(z);
+      w = z + "";
+      w = w.substring(0, w.length() - 2);
+      x += Integer.parseInt(w);
+    }
+    y = < TERMINATOR >
+    {
+      x += y.toString();
+    }
+  | y = < DOUBLE >
+    {
+      x += "float ";
+    }
+    y = < IDENTIFIER >
+    {
+      x += y.toString();
+    }
+    < ASSIGNMENT >
+    {
+      x += "=";
+    }
+    z = expression()
+    {
+      x += z + "";
+    }
+    y = < TERMINATOR >
+    {
+      x += y.toString();
+    }
+  | < STRING >
+    {
+      x += "String ";
+    }
+    y = < IDENTIFIER >
+    {
+      x += y.toString();
+    }
+    y = < ASSIGNMENT >
+    {
+      x += "=";
+    }
+    w = str()
+    {
+      x += "\"";
+      String str = w.substring(1, w.length() - 1);
+      x += str;
+      x += "\"";
+    }
+    y = < TERMINATOR >
+    {
+      x += y.toString();
+    }
+  )
+  {
+    if (inline)
+    {
+      return x;
+    }
+    else
+    {
+      return indent + x + "\n";
+    }
+  }
+}
+
+String str() :
+{
+  Token t;
+}
+{
+  t = < STRINGLITERAL >		
+  {
+    return t.toString();
+  }
+}
